@@ -4,8 +4,9 @@
 #                                             target, the readme and the licence texts
 #
 # The version is read from src\plugin\BlockFolding.rc, the only place it is written.
-# -SkipBuild reuses the .bpl already in build\plugin.
-param([switch]$SkipBuild)
+# -SkipBuild reuses the .bpl already in build\plugin. -OutputDir writes the zip somewhere
+# else than dist\, to try a change without replacing what is published.
+param([switch]$SkipBuild, [string]$OutputDir = '')
 
 $ErrorActionPreference = 'Stop'
 $Root = $PSScriptRoot
@@ -45,7 +46,7 @@ if (-not $SkipBuild) {
   }
 }
 
-$Dist = Join-Path $Root 'dist'
+$Dist = if ($OutputDir -ne '') { $OutputDir } else { Join-Path $Root 'dist' }
 $Stage = Join-Path $Dist "CSCoderBlockFolding-$Version"
 $Zip = "$Stage.zip"
 New-Item -ItemType Directory -Force $Dist | Out-Null
@@ -68,7 +69,15 @@ Copy-Item (Join-Path $Root 'LICENSE.txt'), (Join-Path $Root 'LICENCA.txt') $Stag
 Copy-Item (Join-Path $Root 'installer-readme\README.txt'), (Join-Path $Root 'installer-readme\LEIAME.txt') $Stage
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-[System.IO.Compression.ZipFile]::CreateFromDirectory($Stage, $Zip)
+# Entry by entry, to name them with forward slashes: Windows PowerShell would write
+# backslashes, which other systems read as part of the file name.
+$archive = [System.IO.Compression.ZipFile]::Open($Zip, 'Create')
+try {
+  foreach ($file in (Get-ChildItem -LiteralPath $Stage -Recurse -File | Sort-Object FullName)) {
+    $entry = $file.FullName.Substring($Stage.Length + 1).Replace('\', '/')
+    [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $file.FullName, $entry, 'Optimal')
+  }
+} finally { $archive.Dispose() }
 Remove-Item $Stage -Recurse -Force
 
 Write-Host ''
