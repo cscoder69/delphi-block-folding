@@ -1,0 +1,15 @@
+# Working notes and tool settings: never published.
+.claude/
+CLAUDE.md
+notas/
+
+# Copies of real projects used in tests: never in any repository.
+projetos-reais/
+
+# Build and test output.
+build/
+*.res
+*.dcu
+*.bpl.old
+*.local
+__history/

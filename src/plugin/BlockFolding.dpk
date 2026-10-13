@@ -1,0 +1,23 @@
+package BlockFolding;
+
+// Design-time package: folds statement blocks (begin..end, try, case, repeat and
+// multi-line statements) in the code editor. Menu CS.Coder > Block Folding.
+
+{$R *.res}
+{$DESIGNONLY ON}
+{$IMPLICITBUILD OFF}
+{$DESCRIPTION 'CS.Coder - Block Folding (https://www.cscoder.com.br)'}
+
+requires rtl, vcl, designide;
+
+contains
+  BlockFolding.Strings in 'BlockFolding.Strings.pas',
+  BlockFolding.Blocks in 'BlockFolding.Blocks.pas',
+  BlockFolding.Engine in 'BlockFolding.Engine.pas',
+  BlockFolding.Settings in 'BlockFolding.Settings.pas',
+  BlockFolding.SettingsForm in 'BlockFolding.SettingsForm.pas',
+  BlockFolding.About in 'BlockFolding.About.pas',
+  BlockFolding.Manager in 'BlockFolding.Manager.pas',
+  BlockFolding.Register in 'BlockFolding.Register.pas';
+
+end.

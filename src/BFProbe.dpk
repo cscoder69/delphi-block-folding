@@ -1,0 +1,26 @@
+package BFProbe;
+
+// Test-only package: the plugin units plus the self-driving probe, which
+// exercises the code editor of the IDE it is loaded into and writes a text report.
+// Never install it together with the plugin package. It only runs when BFPROBE_REPORT is set, and
+// it must only be registered in the isolated test profile.
+
+// Version, icon and licence texts of the plugin, for its About window.
+{$R 'plugin\BlockFolding.res'}
+{$DESIGNONLY ON}
+{$IMPLICITBUILD OFF}
+
+requires rtl, vcl, vclimg, designide;
+
+contains
+  BlockFolding.Strings in 'plugin\BlockFolding.Strings.pas',
+  BlockFolding.Blocks in 'plugin\BlockFolding.Blocks.pas',
+  BlockFolding.Engine in 'plugin\BlockFolding.Engine.pas',
+  BlockFolding.Settings in 'plugin\BlockFolding.Settings.pas',
+  BlockFolding.SettingsForm in 'plugin\BlockFolding.SettingsForm.pas',
+  BlockFolding.About in 'plugin\BlockFolding.About.pas',
+  BlockFolding.Manager in 'plugin\BlockFolding.Manager.pas',
+  BlockFolding.Register in 'plugin\BlockFolding.Register.pas',
+  BFProbe.Main in 'BFProbe.Main.pas';
+
+end.

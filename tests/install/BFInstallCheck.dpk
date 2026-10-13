@@ -1,0 +1,16 @@
+package BFInstallCheck;
+
+// Test-only package: checks an installed Block Folding from inside the IDE. It holds
+// none of the plugin's units. Only registered in the isolated test profile, by
+// test-install.ps1, and only while a run is in progress.
+
+{$DESIGNONLY ON}
+{$IMPLICITBUILD OFF}
+{$DESCRIPTION 'Block Folding install check (test only)'}
+
+requires rtl, vcl, designide;
+
+contains
+  BFInstallCheck.Main in 'BFInstallCheck.Main.pas';
+
+end.
