@@ -9,7 +9,7 @@
 
 **English** | [Português (Brasil)](README.pt-BR.md)
 
-**Version:** 0.26.10.12a (beta) · **License:** [MIT](LICENSE.txt), free and open source ·
+**Version:** 0.26.10.16a (beta) · **License:** [MIT](LICENSE.txt), free and open source ·
 **Delphi:** 11, 12 and 13 · [**Download**](https://github.com/cscoder69/delphi-block-folding/releases)
 
 CS.Coder Block Folding is an extension for the Delphi code editor that folds statement
@@ -56,7 +56,8 @@ kept.
 
 ## What's new
 
-**0.26.10.12a** is the first public version. The notes of every version are on the
+**0.26.10.16a**: every error the plugin meets is now written to its log, with where it happened,
+and loading the plugin can no longer stop the IDE from opening. The notes of every version are on the
 [Releases page](https://github.com/cscoder69/delphi-block-folding/releases).
 
 ## Good to know

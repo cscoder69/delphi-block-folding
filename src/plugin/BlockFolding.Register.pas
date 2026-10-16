@@ -216,23 +216,31 @@ end;
 
 procedure TFoldKeys.ToggleKey(const Context: IOTAKeyContext; KeyCode: TShortCut; var BindingResult: TKeyBindingResult);
 begin
-  TFoldManager.Instance.Toggle(Context.EditBuffer.TopView);
   BindingResult := krHandled;
+  if (Context = nil) or (Context.EditBuffer = nil) then Exit;
+  TFoldManager.Instance.Toggle(Context.EditBuffer.TopView);
 end;
 
 procedure TFoldKeys.OpenAllKey(const Context: IOTAKeyContext; KeyCode: TShortCut; var BindingResult: TKeyBindingResult);
 begin
-  TFoldManager.Instance.OpenAll(Context.EditBuffer.TopView);
   BindingResult := krHandled;
+  if (Context = nil) or (Context.EditBuffer = nil) then Exit;
+  TFoldManager.Instance.OpenAll(Context.EditBuffer.TopView);
 end;
 
+// A failure here must not stop the IDE from opening: it goes to the log, and what
+// could be set up stays.
 procedure Register;
 var Services: INTAServices;
 begin
   if Commands <> nil then Exit;
-  TFoldManager.Instance;
-  if Supports(BorlandIDEServices, INTAServices, Services) then Commands := TFoldCommands.CreateMenu(Services.MainMenu);
-  BindKeys;
+  try
+    TFoldManager.Instance;
+    if Supports(BorlandIDEServices, INTAServices, Services) then Commands := TFoldCommands.CreateMenu(Services.MainMenu);
+    BindKeys;
+  except
+    on E: Exception do WriteDiagnosis('error loading the plugin: ' + E.ClassName + ': ' + E.Message);
+  end;
 end;
 
 procedure Unregister;

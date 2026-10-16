@@ -18,7 +18,7 @@
 
 interface
 
-uses System.Classes, System.Types, System.Generics.Collections, Vcl.Controls, Vcl.ExtCtrls, Vcl.Graphics, ToolsAPI,
+uses System.SysUtils, System.Classes, System.Types, System.Generics.Collections, Vcl.Controls, Vcl.ExtCtrls, Vcl.Graphics, ToolsAPI,
   ToolsAPI.Editor, BlockFolding.Blocks;
 
 type
@@ -62,6 +62,8 @@ type
     FReapplied, FPasses, FErrors: Integer;
     FLastPassMs, FMaxPassMs: Int64;
     FLastError: string;
+    // How many times each error was written, so a repaint failing over and over does not fill the log.
+    FErrorCounts: TDictionary<string, Integer>;
     FLog: TStringList;
     // Diagnosis: what the editor reports is written to a text file whenever it changes.
     FDiagTimer: TTimer;
@@ -73,6 +75,8 @@ type
     procedure Sync(Editor: TWinControl; const View: IOTAEditView);
     procedure Forget(const Tracker: IOTAEditLineTracker; Id: Integer);
     procedure Log(const Text: string);
+    // An error of this plugin: counted, and written to the log with where it happened.
+    procedure Failed(const Where: string; E: Exception);
     procedure UpdateLayout(Editor: TWinControl; const View: IOTAEditView);
     procedure EditorPaintGutter(const Rect: TRect; const Stage: TPaintGutterStage; const BeforeEvent: Boolean;
       var AllowDefaultPainting: Boolean; const Context: INTACodeEditorPaintContext);
@@ -114,10 +118,12 @@ type
   end;
 
 function ReadBufferText(const Buffer: IOTAEditBuffer): string;
+// Adds a line to %LOCALAPPDATA%\CSCoder\BlockFolding\diagnostico.log; never fails.
+procedure WriteDiagnosis(const Text: string);
 
 implementation
 
-uses System.SysUtils, System.StrUtils, System.Diagnostics, Winapi.Windows, Winapi.Messages, BlockFolding.Engine,
+uses System.StrUtils, System.Diagnostics, Winapi.Windows, Winapi.Messages, BlockFolding.Engine,
   BlockFolding.Settings;
 
 type
@@ -247,6 +253,7 @@ begin
   FFiles := TObjectDictionary<string, TFileFolds>.Create([doOwnsValues]);
   FLayouts := TDictionary<TWinControl, TEditorLayout>.Create;
   FLog := TStringList.Create;
+  FErrorCounts := TDictionary<string, Integer>.Create;
   FNextId := 720000;
   FNotifier := -1;
   FDiagFile := GetEnvironmentVariable('LOCALAPPDATA') + '\CSCoder\BlockFolding\diagnostico.log';
@@ -274,6 +281,7 @@ begin
   if (FServices <> nil) and (FNotifier >= 0) then FServices.RemoveEditorEventsNotifier(FNotifier);
   FDiagTimer.Free;
   FServices := nil;
+  FErrorCounts.Free;
   FLog.Free;
   FLayouts.Free;
   FFiles.Free;
@@ -298,17 +306,39 @@ begin
   DiagWrite('evento: ' + Text);
 end;
 
+procedure TFoldManager.Failed(const Where: string; E: Exception);
+var Module: array[0..MAX_PATH] of Char; Instance: HMODULE; Key: string; Count: Integer;
+begin
+  Inc(FErrors);
+  FLastError := E.ClassName + ': ' + E.Message;
+  Key := Where + '|' + FLastError;
+  if not FErrorCounts.TryGetValue(Key, Count) then Count := 0;
+  FErrorCounts.AddOrSetValue(Key, Count + 1);
+  if Count >= 3 then Exit;
+  Instance := FindHInstance(ExceptAddr);
+  if (Instance = 0) or (GetModuleFileName(Instance, Module, Length(Module)) = 0) then Module[0] := #0;
+  Log(Format('error in %s: %s (module %s)%s', [Where, FLastError, ExtractFileName(Module),
+    IfThen(Count = 2, ' - not written again this session', '')]));
+end;
+
 procedure TFoldManager.DiagWrite(const Text: string);
-var Stream: TFileStream; Bytes: TBytes;
+begin
+  WriteDiagnosis(Text);
+end;
+
+procedure WriteDiagnosis(const Text: string);
+var Stream: TFileStream; Bytes: TBytes; FileName: string;
 begin
   try
-    if FileExists(FDiagFile) then Stream := TFileStream.Create(FDiagFile, fmOpenReadWrite or fmShareDenyNone)
-    else Stream := TFileStream.Create(FDiagFile, fmCreate);
+    FileName := GetEnvironmentVariable('LOCALAPPDATA') + '\CSCoder\BlockFolding\diagnostico.log';
+    ForceDirectories(ExtractFileDir(FileName));
+    if FileExists(FileName) then Stream := TFileStream.Create(FileName, fmOpenReadWrite or fmShareDenyNone)
+    else Stream := TFileStream.Create(FileName, fmCreate);
     try
       // A log that is never read must not grow for ever.
       if Stream.Size > 2 * 1024 * 1024 then Stream.Size := 0;
       Stream.Seek(0, soEnd);
-      Bytes := TEncoding.UTF8.GetBytes(FormatDateTime('hh:nn:ss.zzz', Now) + ' ' + Text + sLineBreak);
+      Bytes := TEncoding.UTF8.GetBytes(FormatDateTime('dd/mm hh:nn:ss.zzz', Now) + ' ' + Text + sLineBreak);
       Stream.WriteBuffer(Bytes[0], Length(Bytes));
     finally Stream.Free; end;
   except
@@ -395,9 +425,7 @@ begin
   except
     on E: Exception do
     begin
-      Inc(FErrors);
-      FLastError := E.ClassName + ': ' + E.Message;
-      Log('error in repaint: ' + FLastError);
+      Failed('EditorBeginPaint', E);
     end;
   end;
 end;
@@ -413,7 +441,7 @@ end;
 // Before a repaint: which logical line each screen row shows, where the code
 // starts, and (not more than a few times a second) the blocks of the unit.
 procedure TFoldManager.UpdateLayout(Editor: TWinControl; const View: IOTAEditView);
-var Layout: TEditorLayout; Folds: TFileFolds; Row, Line, Count, I: Integer; Text: string; Blocks: TArray<TBlock>;
+var Layout: TEditorLayout; Folds: TFileFolds; Row, Line, Count, I, Total: Integer; Text: string; Blocks: TArray<TBlock>;
   State: INTACodeEditorState; Settings: TFoldSettings;
 begin
   if not FLayouts.TryGetValue(Editor, Layout) then Layout := Default(TEditorLayout);
@@ -433,14 +461,21 @@ begin
   Count := View.ViewSize.cy + 3;
   SetLength(Layout.Rows, Count);
   Line := View.TopPos.Line;
+  Total := View.Buffer.GetLinesInBuffer;
   for Row := 0 to Count - 1 do
   begin
+    // Below the last line the editor is asked nothing.
+    if Line > Total then
+    begin
+      SetLength(Layout.Rows, Row);
+      Break;
+    end;
     Layout.Rows[Row] := Line;
     // The next row shows the next line that is not hidden.
     I := 0;
     repeat
       Inc(Line); Inc(I);
-    until (I > 5000) or not TFoldEngine.LineHidden(Editor, Line);
+    until (I > 5000) or (Line > Total) or not TFoldEngine.LineHidden(Editor, Line);
   end;
   // Where the code starts, from the public editor state.
   State := FServices.GetEditorState(Editor);
@@ -500,8 +535,7 @@ begin
   except
     on E: Exception do
     begin
-      Inc(FErrors);
-      FLastError := E.ClassName + ': ' + E.Message;
+      Failed('EditorPaintGutter', E);
     end;
   end;
 end;
@@ -538,8 +572,7 @@ begin
   except
     on E: Exception do
     begin
-      Inc(FErrors);
-      FLastError := E.ClassName + ': ' + E.Message;
+      Failed('MouseDown', E);
     end;
   end;
 end;
@@ -580,8 +613,7 @@ begin
   except
     on E: Exception do
     begin
-      Inc(FErrors);
-      FLastError := E.ClassName + ': ' + E.Message;
+      Failed('MouseUp', E);
     end;
   end;
 end;
@@ -639,9 +671,7 @@ begin
   except
     on E: Exception do
     begin
-      Inc(FErrors);
-      FLastError := E.ClassName + ': ' + E.Message;
-      Log('error in toggle line: ' + FLastError);
+      Failed('ToggleLine', E);
     end;
   end;
 end;
@@ -777,9 +807,7 @@ begin
     except
       on E: Exception do
       begin
-        Inc(FErrors);
-        FLastError := E.ClassName + ': ' + E.Message;
-        Log('error: ' + FLastError);
+        Failed('Sync', E);
       end;
     end;
   finally
@@ -865,9 +893,7 @@ begin
     except
       on E: Exception do
       begin
-        Inc(FErrors);
-        FLastError := E.ClassName + ': ' + E.Message;
-        Log('error: ' + FLastError);
+        Failed('FoldRange', E);
       end;
     end;
   finally Own.Free; end;
@@ -949,9 +975,7 @@ begin
   except
     on E: Exception do
     begin
-      Inc(FErrors);
-      FLastError := E.ClassName + ': ' + E.Message;
-      Log('error in toggle: ' + FLastError);
+      Failed('Toggle', E);
       Result := 'error';
     end;
   end;
@@ -987,9 +1011,7 @@ begin
   except
     on E: Exception do
     begin
-      Inc(FErrors);
-      FLastError := E.ClassName + ': ' + E.Message;
-      Log('error in open all: ' + FLastError);
+      Failed('OpenAll', E);
     end;
   end;
 end;

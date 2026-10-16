@@ -9,7 +9,7 @@
 
 [English](README.md) | **Português (Brasil)**
 
-**Versão:** 0.26.10.12a (beta) · **Licença:** [MIT](LICENSE.txt), gratuito e de código
+**Versão:** 0.26.10.16a (beta) · **Licença:** [MIT](LICENSE.txt), gratuito e de código
 aberto ([resumo em português](LICENCA.txt)) · **Delphi:** 11, 12 e 13 ·
 [**Baixar**](https://github.com/cscoder69/delphi-block-folding/releases)
 
@@ -57,7 +57,8 @@ configurações são mantidas.
 
 ## Novidades
 
-**0.26.10.12a** é a primeira versão pública. As notas de todas as versões estão na
+**0.26.10.16a**: todo erro que o plugin encontra passa a ser gravado no log dele, com o lugar em que
+aconteceu, e a carga do plugin não impede mais a IDE de abrir. As notas de todas as versões estão na
 [página de Releases](https://github.com/cscoder69/delphi-block-folding/releases).
 
 ## Bom saber

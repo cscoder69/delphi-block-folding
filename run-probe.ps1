@@ -1,4 +1,4 @@
-# Builds the probe package and runs it inside a real Delphi IDE, without user input.
+﻿# Builds the probe package and runs it inside a real Delphi IDE, without user input.
 # The IDE starts with its own registry profile (bds -r), so the normal IDE
 # configuration and its installed packages are not read or changed. Everything
 # is written below build\.
@@ -27,7 +27,10 @@ param(
     # Mode foldrisk: the single internal call to try (UnElide2True, UnElide2False, unElideLine).
     [string]$Risk = '',
     [string]$IdeProfile = 'BlockFoldingProbe',
-    [int]$TimeoutSeconds = 420
+    [int]$TimeoutSeconds = 420,
+    # Run the IDE on the invisible desktop CSCoderTest_BlockFolding (cscoder-common	estes): it does not take
+    # the screen. Real keyboard and mouse input does not reach it, so steps that need it fail there.
+    [switch]$OffScreen
 )
 $ErrorActionPreference = 'Stop'
 $installations = @{
@@ -144,6 +147,11 @@ $env:BFPROBE_SAMPLE2 = $sample2
 $env:BFPROBE_PROJECT = $projectFile
 try {
     if ($RealProfile) { $ide = Start-Process -FilePath $bds -ArgumentList '-ns', '-np' -PassThru }
+    elseif ($OffScreen) {
+        $launcher = Join-Path $PSScriptRoot '..\cscoder-common\testes\Start-OnTestDesktop.ps1'
+        $ideId = & $launcher -Desktop CSCoderTest_BlockFolding -FilePath $bds -Arguments "-r $IdeProfile -ns -np"
+        $ide = Get-Process -Id ([int]$ideId)
+    }
     else { $ide = Start-Process -FilePath $bds -ArgumentList '-r', $IdeProfile, '-ns', '-np' -PassThru }
 } finally {
     Remove-Item Env:\BFPROBE_REPORT, Env:\BFPROBE_SAMPLE, Env:\BFPROBE_MODE, Env:\BFPROBE_RISK, Env:\BFPROBE_INPUT, Env:\BFPROBE_BIG, Env:\BFPROBE_SAMPLE2, Env:\BFPROBE_PROJECT -ErrorAction SilentlyContinue
